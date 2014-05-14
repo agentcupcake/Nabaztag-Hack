@@ -1,0 +1,409 @@
+ /*
+This is code for the hacked Nabaztag.
+
+It uses the existing hardware plugged into a Teensy 3.1.
+
+PINS:
+  HEAD (INPUT):   14
+  SCROLL (INPUT): 21
+  LEDS (OUTPUT):  2
+  LEFT:
+    MOTOR ENABLE: 7
+    MOTOR REV:    8
+    MOTOR FWD:    9
+  RIGHT:
+    MOTOR ENABLE: 10
+    MOTOR REV:    11
+    MOTOR FWD:    12
+
+RESOURCES: 
+  Teensyduino
+  Adafruit NeoPixel library
+
+DESCRIPTION: 
+  Click the head button to turn the LEDs ON or OFF. 
+  Use the scroll wheel to pick from one of 6 colors. 
+  Every 2 seconds, the ears choose a new movement - forward, backward, or stopped.
+
+*/
+
+
+
+
+
+// -----------------------------------------------------------------------------
+//		CONFIG
+// -----------------------------------------------------------------------------
+
+// ___________________
+//     ALL PINS
+// ___________________
+
+#define HEAD    14
+#define SCROLL  21
+#define LEDS    2
+
+#define LENABLE    7
+#define LMOTORREV  8
+#define LMOTORFWD  9
+
+#define RENABLE    10
+#define RMOTORREV  11
+#define RMOTORFWD  12
+
+#define ENCODER1  18
+#define ENCODER2  19
+
+// ___________________
+//     LED STUFF
+// ___________________
+
+#include <Adafruit_NeoPixel.h>
+// (PixelsInStrip, PinNumber, PixelType)
+#define PIXELNUM 5
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXELNUM, LEDS, NEO_GRB + NEO_KHZ800);
+
+#define RED 0xFF0000
+#define ORANGE 0xFF3300
+#define YELLOW 0xFFFF00
+#define GREEN 0x00FF00
+#define BLUE 0x0000FF
+#define PURPLE 0xFF00FF
+
+#define BLACK 0x000000
+#define WHITE 0xFFFFFF
+
+#define LEDdelay 100
+
+// ___________________
+//     HEAD STUFF
+// ___________________
+
+int currentValueHEAD = 0; 
+long lastDebounceTimeHEAD = 0;  // the last time the output pin was toggled
+long debounceDelayHEAD = 5;    // the debounce time; increase if the output flickers
+
+int headCount = 0;
+int headCountOn = 0;
+int headCountOff = 0;
+int lastHeadCount = 1;
+
+// ___________________
+//     SCROLL STUFF
+// ___________________
+
+int scrollValue = 0;
+
+// ___________________
+//     EARS STUFF
+// ___________________
+
+// 0 = LEFT, 1 = RIGHT, 2 = BOTH.
+
+// 0 = LEFT ear, 1 = RIGHT ear, 2 = BOTH ears.
+
+int Ldirection = 0;   // 0 = forward, 1 = back
+int Lduration = 4000;
+int Lcount = 0;
+int LmillisCount = 0;
+
+int Rdirection = 0;
+int Rduration = 4000;
+int Rcount = 0;
+int RmillisCount = 0;
+
+int bothDirection = 0;
+int bothDuration = 2000;
+int bothCount = 0;
+int bothMillisCount = 0;
+
+// -----------------------------------------------------------------------------
+//		SETUP
+// -----------------------------------------------------------------------------
+
+
+void setup(){
+
+  Serial.begin(9600);
+
+  pinMode(HEAD, INPUT_PULLUP);
+
+  strip.begin();
+  strip.show();
+
+  setupEars();
+  
+// Start both ears going FWD.
+
+  digitalWrite (LENABLE, HIGH);
+  digitalWrite (LMOTORFWD, HIGH);
+  digitalWrite (LMOTORREV, LOW);
+ 
+  digitalWrite (RENABLE, HIGH);
+  digitalWrite (RMOTORFWD, HIGH);
+  digitalWrite (RMOTORREV, LOW);
+
+}
+
+// -----------------------------------------------------------------------------
+//		MAIN LOOP
+// -----------------------------------------------------------------------------
+
+
+void loop() {
+
+  updateHead();
+
+  if (headCount%4 == 0) {
+    
+    int color = colorPicker((int)(scrollRead()/100.0));
+    wipeStrip (color, PIXELNUM, LEDdelay);
+
+  }  else {
+
+    wipeStrip (BLACK, PIXELNUM, LEDdelay);
+
+  }
+
+
+}
+
+// -----------------------------------------------------------------------------
+//		FUNCTIONS
+// -----------------------------------------------------------------------------
+
+// ++++++++++++++++++++++++
+/* HEADBUTTON: returns the
+debounced value of the head
+being pressed; does NOT 
+indicate the on/off value,
+etc; just whether the button
+is being pushed or not at the
+time of reading. */
+// ++++++++++++++++++++++++
+
+int headButton() {
+
+  static int lastValue = HIGH;  // holds the last read from the pulse pin.
+  int newValue = digitalRead (HEAD);
+
+  if (newValue != lastValue) { // if it's CHANGED from the last read...
+    lastDebounceTimeHEAD = millis(); // save its clock cycle; we need to check it.
+  }
+  // If enough time has passed (aka, it's not just a "bounce" from the 
+  // analog signal)...
+  if ((millis() - lastDebounceTimeHEAD) > debounceDelayHEAD) { 
+    // and if the current value is DIFFERENT than the one you just read...
+    if (currentValueHEAD != newValue) { 
+      currentValueHEAD = newValue; // make them the same.
+    }
+  }
+
+  lastValue = newValue; // Your new value becomes the old one for comparison.
+  return (newValue);
+
+}
+
+// ++++++++++++++++++++++++
+/* UPDATE HEAD: takes the
+debounced value and updates
+all associated global 
+variables. */
+// ++++++++++++++++++++++++
+
+
+void updateHead () {
+
+  int thisHeadCount = headButton();
+
+  if (lastHeadCount != thisHeadCount) {
+    if (thisHeadCount == 0) {
+      headCountOn++; 
+    } 
+    else if (thisHeadCount == 1) {
+      headCountOff++; 
+    }
+    headCount++;
+    lastHeadCount = thisHeadCount;    
+  }  
+}
+
+
+// ++++++++++++++++++++++++
+/* SCROLL READ: returns the
+position of the scroll wheel
+at the time of reading. Value
+should be b/w 0 and 1023. */
+// ++++++++++++++++++++++++
+
+int scrollRead() {
+  scrollValue = analogRead(SCROLL); 
+  return (scrollValue);
+}
+
+
+// ++++++++++++++++++++++++
+/* WIPESTRIP: takes one color,
+ pushes it down (zero to length)
+ until strip is full. */
+// ++++++++++++++++++++++++
+
+void wipeStrip (int color, int length, int delayTime) {
+  for (int i = 0; i < length; i++) {
+    strip.setPixelColor (i, color); 
+    strip.show();
+    customDelay (delayTime);
+  }
+}
+
+// ++++++++++++++++++++++++
+/* COLOR PICKER: Chooses a
+pre-set color based on given 
+input. */
+// ++++++++++++++++++++++++
+
+
+int colorPicker (int inputNum) {
+
+  int color = 0;
+
+  Serial.println(inputNum);
+
+  switch (inputNum) {
+  case 0:
+    color = RED;
+    break;
+  case 1:
+    color = ORANGE;
+    break;
+  case 2:
+    color = YELLOW;
+    break;
+  case 3:
+    color = GREEN;
+    break;
+  case 4:
+    color = BLUE;
+    break;
+  case 5:
+    color = PURPLE;
+    break;
+  case 6:
+    color = RED;
+    break;
+  default: 
+    color = WHITE;
+    break;
+  }
+
+  return (color);
+}
+
+// ++++++++++++++++++++++++
+/* CUSTOM DELAY: Checks and
+updates values that would 
+otherwise be blocked by a
+regular delay. Currently:
+checks head value. */
+// ++++++++++++++++++++++++
+
+void customDelay (int delayTime) {
+
+  for (int i = 0; i < delayTime; i++) {
+
+    updateHead();
+    checkEars();
+    delay(1);
+
+  } 
+
+
+}
+
+// ++++++++++++++++++++++++
+/* SET UP EARS: The setup
+routine to make sure both
+motors are initialized correctly.
+MUST be placed in SETUP. */
+// ++++++++++++++++++++++++
+
+static inline void setupEars () {
+
+  // DO THIS FIRST FOR ALL PINS.
+  // Make sure it's in a known state...
+  digitalWrite (LENABLE, LOW);
+  digitalWrite (LMOTORREV, LOW);
+  digitalWrite (LMOTORFWD, LOW);
+
+  //... before you push stuff to it.
+  pinMode(LENABLE, OUTPUT);     
+  pinMode(LMOTORREV, OUTPUT);     
+  pinMode(LMOTORFWD, OUTPUT);     
+
+  // DO THIS FIRST FOR ALL PINS.
+  // Make sure it's in a known state...
+  digitalWrite (RENABLE, LOW);
+  digitalWrite (RMOTORREV, LOW);
+  digitalWrite (RMOTORFWD, LOW);
+
+  //... before you push stuff to it.
+  pinMode(RENABLE, OUTPUT);     
+  pinMode(RMOTORREV, OUTPUT);     
+  pinMode(RMOTORFWD, OUTPUT);    
+
+}
+
+// ++++++++++++++++++++++++
+/* CHECK EARS ((SCRATCH)) */
+// ++++++++++++++++++++++++
+
+
+void checkEars () {
+ 
+  if (millis() > bothMillisCount + bothDuration) {
+   
+   int randLeft = random(0, 3);
+   int randRight = random (0, 3);
+   
+   if (randLeft == 0) {
+     // STOP the ear
+     digitalWrite (LENABLE, LOW);
+
+   } else if (randLeft == 1) {
+     // go BACKWARD
+     digitalWrite (LMOTORREV, HIGH);
+     digitalWrite (LMOTORFWD, LOW);
+     digitalWrite (LENABLE, HIGH);
+
+   } else if (randLeft == 2) {
+     // go FORWARD
+     digitalWrite (LMOTORFWD, HIGH);
+     digitalWrite (LMOTORREV, LOW);
+     digitalWrite (LENABLE, HIGH);
+   }
+
+   if (randRight == 0) {
+     // STOP the ear
+     digitalWrite (RENABLE, LOW);
+
+   } else if (randRight == 1) {
+     // go BACKWARD
+     digitalWrite (RMOTORREV, HIGH);
+     digitalWrite (RMOTORFWD, LOW);
+     digitalWrite (RENABLE, HIGH);
+
+   } else if (randRight == 2) {
+     // go FORWARD
+     digitalWrite (RMOTORFWD, HIGH);
+     digitalWrite (RMOTORREV, LOW);
+     digitalWrite (RENABLE, HIGH);
+   }
+
+
+   bothMillisCount = millis();   
+    
+  }
+  
+}
+
+
