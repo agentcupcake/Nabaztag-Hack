@@ -1,0 +1,77 @@
+/*
+This is code for the hacked Nabaztag.
+
+It uses the existing hardware plugged into a Teensy 3.1.
+
+PINS:
+  HEAD (INPUT):   14
+  SCROLL (INPUT): 21
+
+RESOURCES: 
+  Teensyduino
+
+DESCRIPTION: 
+ If the head button is pressed, the Serial will print
+ out the scroll wheel's value.
+
+*/
+
+# define ONOFFPIN 14
+# define SCROLLPIN 21
+
+int currentValueHEAD = 0; 
+long lastDebounceTimeHEAD = 0;  // the last time the output pin was toggled
+long debounceDelayHEAD = 5;    // the debounce time; increase if the output flickers
+
+int scrollValue = 0;
+
+
+void setup(){
+  //start serial connection
+  Serial.begin(9600);
+  // configure the two inputs, and the onboard LED.
+  pinMode(ONOFFPIN, INPUT_PULLUP);
+
+}
+
+
+void loop() {
+
+if (headButton() == 0) {
+ 
+  Serial.println (scrollRead());
+  delay (10); 
+  
+}
+
+
+}
+
+
+int headButton() {
+
+  static int lastValue = HIGH;  // holds the last read from the pulse pin.
+  int newValue = digitalRead (ONOFFPIN);
+
+  if (newValue != lastValue) { // if it's CHANGED from the last read...
+    lastDebounceTimeHEAD = millis(); // save its clock cycle; we need to check it.
+  }
+  // If enough time has passed (aka, it's not just a "bounce" from the 
+  // analog signal)...
+  if ((millis() - lastDebounceTimeHEAD) > debounceDelayHEAD) { 
+    // and if the current value is DIFFERENT than the one you just read...
+    if (currentValueHEAD != newValue) { 
+      currentValueHEAD = newValue; // make them the same.
+    }
+  }
+
+  lastValue = newValue; // Your new value becomes the old one for comparison.
+  return (newValue);
+
+}
+
+
+int scrollRead() {
+  scrollValue = analogRead(SCROLLPIN); 
+  return (scrollValue);
+}
