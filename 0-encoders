@@ -1,0 +1,53 @@
+/*
+
+This is a scrap of code to read the Bunny's ear encoders.
+
+*/
+
+
+#define EARPIN 18
+#define LOWVAL 1
+#define HIGHVAL 2
+
+void setup() {
+
+  Serial.begin (9600);
+//  pinMode (EARPIN, INPUT);
+
+}
+
+void loop() {
+  
+  
+  
+// Serial.println ("CHECK");
+
+  static int lastRead = 0;
+  static int state = HIGHVAL;
+  
+  int readMe = analogRead (EARPIN);
+
+  Serial.println (readMe);
+
+
+if ((HIGHVAL == state) && (readMe < 500)) {
+  Serial.print (millis());
+  Serial.print (" (HIGH): ");
+  Serial.println (readMe);
+
+  state = LOWVAL;
+}
+if ((LOWVAL == state) && (readMe > 500)) {
+  Serial.print (millis());
+  Serial.print (" (LOW): ");
+  Serial.println (readMe);
+
+  state = HIGHVAL;
+}
+
+
+
+  lastRead = readMe;
+  
+
+}
