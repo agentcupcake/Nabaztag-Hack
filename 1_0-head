@@ -1,0 +1,64 @@
+/*
+This is code for the hacked Nabaztag.
+
+It uses the existing hardware plugged into a Teensy 3.1.
+
+PINS:
+  HEAD (INPUT): 14
+
+RESOURCES: 
+  Teensyduino
+
+DESCRIPTION: 
+  Head button returns a 1 if it's not being pressed and a 0 
+  if it's pressed to the Serial Monitor.
+
+
+*/
+
+
+
+# define ONOFFPIN 14
+
+
+ int currentValue = 0; 
+ long lastDebounceTime = 0;  // the last time the output pin was toggled
+ long debounceDelay = 5;    // the debounce time; increase if the output flickers
+
+void setup(){
+  //start serial connection
+  Serial.begin(9600);
+  // configure the two inputs, and the onboard LED.
+  pinMode(ONOFFPIN, INPUT_PULLUP);
+
+}
+
+void loop() {
+  
+  Serial.println (headButton());
+  delay (10);
+  
+}
+
+
+int headButton() {
+  
+ static int lastValue = HIGH;  // holds the last read from the pulse pin.
+ int newValue = digitalRead (ONOFFPIN);
+
+     if (newValue != lastValue) { // if it's CHANGED from the last read...
+      lastDebounceTime = millis(); // save its clock cycle; we need to check it.
+    }
+    // If enough time has passed (aka, it's not just a "bounce" from the 
+    // analog signal)...
+    if ((millis() - lastDebounceTime) > debounceDelay) { 
+      // and if the current value is DIFFERENT than the one you just read...
+      if (currentValue != newValue) { 
+        currentValue = newValue; // make them the same.
+      }
+    }
+
+    lastValue = newValue; // Your new value becomes the old one for comparison.
+    return (newValue);
+    
+}
