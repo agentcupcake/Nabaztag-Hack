@@ -1,0 +1,207 @@
+ /*
+This is code for the hacked Nabaztag.
+
+It uses the existing hardware plugged into a Teensy 3.1.
+
+PINS:
+  HEAD (INPUT):   14
+  SCROLL (INPUT): 21
+  LEDS (OUTPUT):  2
+
+RESOURCES: 
+  Teensyduino
+  Adafruit NeoPixel library
+
+DESCRIPTION: 
+  Click the head button to turn the LEDs ON or OFF. Use the 
+  scroll wheel to pick from one of 6 colors.
+ 
+
+*/
+
+// ___________________
+//     LED STUFF
+// ___________________
+
+#include <Adafruit_NeoPixel.h>
+// (PixelsInStrip, PinNumber, PixelType)
+#define PIN  2
+#define PIXELNUM 59
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXELNUM, PIN, NEO_GRB + NEO_KHZ800);
+
+const int ledsPerStrip = 5;
+
+#define RED 0xFF0000
+#define ORANGE 0xFF3300
+#define YELLOW 0xFFFF00
+#define GREEN 0x00FF00
+#define BLUE 0x0000FF
+#define PURPLE 0xFF00FF
+
+#define BLACK 0x000000
+#define WHITE 0xFFFFFF
+
+#define LEDdelay 100
+
+// ___________________
+// ___________________
+
+
+# define ONOFFPIN 14
+# define SCROLLPIN 21
+
+int currentValueHEAD = 0; 
+long lastDebounceTimeHEAD = 0;  // the last time the output pin was toggled
+long debounceDelayHEAD = 5;    // the debounce time; increase if the output flickers
+
+int scrollValue = 0;
+
+int headCount = 0;
+int headCountOn = 0;
+int headCountOff = 0;
+int lastHeadCount = 1;
+
+void setup(){
+  //start serial connection
+  Serial.begin(9600);
+
+  pinMode(ONOFFPIN, INPUT_PULLUP);
+
+  strip.begin();
+  strip.show();
+
+
+}
+
+
+void loop() {
+
+  updateHead();
+
+  if (headCount%4 == 0) {
+
+    //Serial.println ((int)(scrollRead()/100.0));
+    int color = colorPicker((int)(scrollRead()/100.0));
+    wipeStrip (color, ledsPerStrip, LEDdelay);
+
+  }  
+  else {
+
+    wipeStrip (BLACK, ledsPerStrip, LEDdelay);
+
+  }
+
+
+}
+
+int headButton() {
+
+  static int lastValue = HIGH;  // holds the last read from the pulse pin.
+  int newValue = digitalRead (ONOFFPIN);
+
+  if (newValue != lastValue) { // if it's CHANGED from the last read...
+    lastDebounceTimeHEAD = millis(); // save its clock cycle; we need to check it.
+  }
+  // If enough time has passed (aka, it's not just a "bounce" from the 
+  // analog signal)...
+  if ((millis() - lastDebounceTimeHEAD) > debounceDelayHEAD) { 
+    // and if the current value is DIFFERENT than the one you just read...
+    if (currentValueHEAD != newValue) { 
+      currentValueHEAD = newValue; // make them the same.
+    }
+  }
+
+  lastValue = newValue; // Your new value becomes the old one for comparison.
+  return (newValue);
+
+}
+
+void updateHead () {
+
+  int thisHeadCount = headButton();
+
+  if (lastHeadCount != thisHeadCount) {
+    if (thisHeadCount == 0) {
+      headCountOn++; 
+    } 
+    else if (thisHeadCount == 1) {
+      headCountOff++; 
+    }
+    headCount++;
+    lastHeadCount = thisHeadCount;    
+  }  
+}
+
+
+
+
+int scrollRead() {
+  scrollValue = analogRead(SCROLLPIN); 
+  return (scrollValue);
+}
+
+
+
+
+// ++++++++++++++++++++++++
+/* WIPESTRIP: takes one color,
+ pushes it down (zero to length)
+ until strip is full. */
+// ++++++++++++++++++++++++
+
+void wipeStrip (int color, int length, int delayTime) {
+  for (int i = 0; i < length; i++) {
+    strip.setPixelColor (i, color); 
+    strip.show();
+    customDelay (delayTime);
+  }
+}
+
+
+
+int colorPicker (int inputNum) {
+
+  int color = 0;
+
+  Serial.println(inputNum);
+
+  switch (inputNum) {
+  case 0:
+    color = RED;
+    break;
+  case 1:
+    color = ORANGE;
+    break;
+  case 2:
+    color = YELLOW;
+    break;
+  case 3:
+    color = GREEN;
+    break;
+  case 4:
+    color = BLUE;
+    break;
+  case 5:
+    color = PURPLE;
+    break;
+  default: 
+    color = WHITE;
+    break;
+  }
+
+  return (color);
+}
+
+void customDelay (int delayTime) {
+
+  for (int i = 0; i < delayTime; i++) {
+
+    updateHead();
+    delay(1);
+
+  } 
+
+
+}
+
+
